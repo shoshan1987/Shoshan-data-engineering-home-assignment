@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CloudFormation template to create Glue resources.
+
+Resources:
+  S3Bucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: "data-engineer-assignment-shoshan"
+
+  GlueCatalogDatabase:
+    Type: "AWS::Glue::Database"
+    Properties:
+      CatalogId: !Ref "AWS::AccountId"
+      DatabaseInput:
+        Name: "shoshan_glue_database"
+
+  GlueServiceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "glue.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "GlueJobPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "logs:*"
+                  - "glue:*"
+                Resource: "*"
+
+  GlueJob:
+    Type: "AWS::Glue::Job"
+    Properties:
+      Name: "shoshan-glue-job"
+      Role: !GetAtt GlueServiceRole.Arn
+      Command:
+        Name: "glueetl"
+        ScriptLocation: !Sub "s3://${S3Bucket}/scripts/glue-script.py"
+        PythonVersion: "3"
+      DefaultArguments:
+        "--TempDir": !Sub "s3://${S3Bucket}/temp/"
+        "--job-bookmark-option": "job-bookmark-enable"
+        "--enable-glue-datacatalog": "true"
+        "--log-level": "INFO" # More detailed logs
+      MaxRetries: 1
+      GlueVersion: "2.0"
+      NumberOfWorkers: 2
+      WorkerType: "G.1X"
+
+  # Crawlers for each result file
+
+  AverageReturnCrawler:
+    Type: "AWS::Glue::Crawler"
+    Properties:
+      Name: "shoshan-average-return-crawler"
+      Role: !GetAtt GlueServiceRole.Arn
+      DatabaseName: !Ref GlueCatalogDatabase
+      Targets:
+        S3Targets:
+          - Path: !Sub "s3://${S3Bucket}/output/average_return/"
+      SchemaChangePolicy:
+        UpdateBehavior: "UPDATE_IN_DATABASE"
+        DeleteBehavior: "DEPRECATE_IN_DATABASE"
+
+  HighestWorthCrawler:
+    Type: "AWS::Glue::Crawler"
+    Properties:
+      Name: "shoshan-highest-worth-crawler"
+      Role: !GetAtt GlueServiceRole.Arn
+      DatabaseName: !Ref GlueCatalogDatabase
+      Targets:
+        S3Targets:
+          - Path: !Sub "s3://${S3Bucket}/output/highest_worth_stock/"
+      SchemaChangePolicy:
+        UpdateBehavior: "UPDATE_IN_DATABASE"
+        DeleteBehavior: "DEPRECATE_IN_DATABASE"
+
+  MostVolatileCrawler:
+    Type: "AWS::Glue::Crawler"
+    Properties:
+      Name: "shoshan-most-volatile-crawler"
+      Role: !GetAtt GlueServiceRole.Arn
+      DatabaseName: !Ref GlueCatalogDatabase
+      Targets:
+        S3Targets:
+          - Path: !Sub "s3://${S3Bucket}/output/most_volatile_stock/"
+      SchemaChangePolicy:
+        UpdateBehavior: "UPDATE_IN_DATABASE"
+        DeleteBehavior: "DEPRECATE_IN_DATABASE"
+
+  Top30DayReturnCrawler:
+    Type: "AWS::Glue::Crawler"
+    Properties:
+      Name: "shoshan-top-30-day-return-crawler"
+      Role: !GetAtt GlueServiceRole.Arn
+      DatabaseName: !Ref GlueCatalogDatabase
+      Targets:
+        S3Targets:
+          - Path: !Sub "s3://${S3Bucket}/output/top_30_day_returns/"
+      SchemaChangePolicy:
+        UpdateBehavior: "UPDATE_IN_DATABASE"
+        DeleteBehavior: "DEPRECATE_IN_DATABASE"
+
+Outputs:
+  GlueJobName:
+    Description: "Glue Job Name"
+    Value: !Ref GlueJob
+
+  S3BucketName:
+    Description: "S3 Bucket Name"
+    Value: !Ref S3Bucket
+
+  GlueCatalogDatabaseName:
+    Description: "Glue Catalog Database Name"
+    Value: !Ref GlueCatalogDatabase
+
+  AverageReturnCrawlerName:
+    Description: "Glue Crawler for Average Return"
+    Value: !Ref AverageReturnCrawler
+
+  HighestWorthCrawlerName:
+    Description: "Glue Crawler for Highest Worth Stock"
+    Value: !Ref HighestWorthCrawler
+
+  MostVolatileCrawlerName:
+    Description: "Glue Crawler for Most Volatile Stock"
+    Value: !Ref MostVolatileCrawler
+
+  Top30DayReturnCrawlerName:
+    Description: "Glue Crawler for Top 30 Day Return"
+    Value: !Ref Top30DayReturnCrawler
